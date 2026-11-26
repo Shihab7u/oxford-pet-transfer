@@ -1,0 +1,284 @@
+\documentclass[10pt]{article}
+\usepackage[a4paper,margin=2cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+\usepackage{caption}
+\captionsetup{font=small,labelfont=bf,skip=3pt}
+\setlength{\parskip}{2pt}
+\setlength{\parindent}{0pt}
+\graphicspath{{../results/figures/}}
+
+\input{../results/tables/numbers.tex}
+
+\title{\vspace{-1.2cm}\textbf{Transfer Learning for Fine-Grained Pet Breed Classification}\\[2pt]
+\large A comparison of full fine-tuning, classifier-head training, and frozen features}
+\author{Student Name \quad (Student ID)}
+\date{Computer Vision --- Fall 2026}
+
+\begin{document}
+\maketitle
+\vspace{-0.6cm}
+
+\begin{abstract}
+\noindent
+We adapt an ImageNet-pretrained MobileNetV3-Small to the 37 breed classes of the
+Oxford-IIIT Pet dataset and compare three transfer-learning strategies under one fixed
+data split and evaluation protocol: full fine-tuning, training only the classifier head,
+and a scikit-learn classifier on frozen penultimate features. Full fine-tuning reaches
+\fullAcc\% test accuracy (macro-F1 \fullFone\%) but costs \fullTime{} minutes of CPU
+training; head-only training reaches \headAcc\% (macro-F1 \headFone\%) in \headTime{}
+minutes with \headParams{} trainable parameters, and the best traditional classifier
+reaches \lrAcc\% (macro-F1 \lrFone\%). The results show a clear accuracy/cost trade-off
+and illustrate how much of the ImageNet representation already transfers to fine-grained
+pet breeds.
+\end{abstract}
+
+\section{Introduction}
+Fine-grained visual classification requires separating categories that share an overall
+shape and differ mainly in local texture, colour, and proportions. Oxford-IIIT Pet is a
+compact benchmark for this setting: 37 cat and dog breeds with roughly 200 images each,
+substantial variation in pose, scale, and lighting, and a non-trivial domain gap from
+ImageNet. Training a deep network from scratch on such a small dataset is unlikely to
+work well, so we start from ImageNet-1K weights and ask how much of the network should
+be adapted.
+
+We compare three strategies that are identical in data, preprocessing, and evaluation:
+(i) updating the whole network, (ii) freezing the convolutional feature extractor and
+training only the fully connected head, and (iii) using the frozen network as a feature
+extractor and training a traditional classifier on its 576-dimensional penultimate
+representation. Besides accuracy and macro-F1, we report trainable parameter counts and
+wall-clock cost, and we analyse the confusion structure and the train/test gap.
+
+\section{Dataset and splits}
+The Oxford-IIIT Pet dataset \cite{parkhi2012cats} contains 37 breeds (12 cats, 25 dogs)
+and 7,390 JPEG images. Images are annotated with breed, a head bounding box, and a
+pixel-level trimap; we use only the breed labels. The dataset is distributed for
+research purposes only, and the images remain subject to the terms of use of the sites
+from which they were collected; we therefore do not redistribute the data. It can be
+obtained from \url{https://www.robots.ox.ac.uk/~vgg/data/pets/} by extracting
+\texttt{images.tar.gz} and \texttt{annotations.tar.gz}.
+
+We use the official \texttt{trainval}/\texttt{test} partitions. Entries whose image file
+is absent are skipped (44 of 7,393 files), leaving 7,349 usable images. The official
+trainval partition (3,680 images) is split once into 2,944 training and 736 validation
+images with an 80/20 stratified split by breed (seed 42); the 3,669-image test partition
+is kept separate and is touched only for the final evaluation. Table~\ref{tab:counts}
+lists the per-breed counts. The split manifests are stored as CSV files in the
+repository, so every method uses exactly the same images.
+
+\begin{table}[t]
+\centering
+\caption{Images per breed in each split. The official test partition is never used for
+training or model selection.}
+\label{tab:counts}
+\scriptsize
+\input{../results/tables/dataset_table.tex}
+\end{table}
+
+\paragraph{Preprocessing and augmentation.}
+All images are resized with the transformation associated with the pre-trained weights.
+Training uses \texttt{RandomResizedCrop(224, scale=(0.65,1))}, a random horizontal flip,
+and mild colour jitter (brightness/contrast 0.25, saturation 0.2, hue 0.03). Validation
+and test images are resized so that the shorter side is 256 and centre-cropped to
+$224\times224$. All splits use ImageNet normalization
+($\mu=[0.485,0.456,0.406]$, $\sigma=[0.229,0.224,0.225]$). Augmentation is applied to
+the training set only. The dataset is almost balanced (79--80 training images per
+breed), so no re-weighting or resampling is used; accuracy and macro-F1 are therefore
+both meaningful.
+
+\section{Methods}
+\subsection{Backbone and classifier head}
+All experiments use \texttt{torchvision.models.mobilenet\_v3\_small} with
+\texttt{MobileNet\_V3\_Small\_Weights.DEFAULT} (ImageNet-1K) \cite{howard2019mobilenetv3}.
+The original 1,000-way final layer is replaced by \texttt{Linear(1024, 37)}, giving a
+network with 1,555,781 parameters in total. The classifier block is
+$\text{Linear}(576,1024) \rightarrow \text{Hardswish} \rightarrow \text{Dropout}(0.2)
+\rightarrow \text{Linear}(1024,37)$.
+
+\subsection{Adaptation strategies}
+\textbf{Full fine-tuning.} The whole network, including all convolutional layers, is
+trained (\fullParams{} trainable parameters).
+
+\textbf{Classifier-head training.} The feature extractor (\texttt{features} and
+\texttt{avgpool}) is frozen. The only trainable layers are \texttt{classifier[0]}
+($576\rightarrow1024$) and \texttt{classifier[3]} ($1024\rightarrow37$); Hardswish and
+Dropout have no parameters. This gives \headParams{} trainable parameters, 40.4\% of the
+full model.
+
+\textbf{Frozen features with a traditional classifier.} The frozen network maps each
+image to the 576-dimensional output of \texttt{features} followed by global average
+pooling, i.e.\ the input of \texttt{classifier[0]}. Features are extracted once for
+train, validation, and test. A \texttt{StandardScaler} is fit on the training features
+only and applied to all splits. We compare multinomial logistic regression, a linear SVM,
+and a 500-tree random forest. For logistic regression and the SVM, the regularization
+strength is chosen from $C\in\{10^{-3},10^{-2},10^{-1},1\}$ by validation macro-F1; the
+random forest uses scikit-learn defaults with \texttt{sqrt} feature subsampling
+\cite{pedregosa2011sklearn}. No dimensionality reduction was necessary at 576 dimensions.
+
+\subsection{Training protocol and model selection}
+Both neural models use AdamW, batch size 32, cross-entropy with label smoothing 0.1, and
+a one-epoch linear warm-up followed by cosine decay. Full fine-tuning runs for 12 epochs
+at $\mathrm{lr}=3\times10^{-4}$; head-only training runs for 15 epochs at
+$\mathrm{lr}=10^{-3}$; weight decay is $10^{-4}$ in both cases. Training uses CPU
+bfloat16 autocast. After every epoch we compute validation accuracy and macro-F1, and we
+keep the checkpoint with the best validation macro-F1. The test set is never used for
+early stopping, hyper-parameter selection, or threshold selection. All runs use seed 42
+for Python, NumPy, and PyTorch; deterministic algorithms are requested where available.
+The selected checkpoint is evaluated exactly once on the test set. Training times are
+measured on the same 4-core CPU machine for all methods; the scikit-learn times include
+the one-off feature extraction (\extractTime{} minutes).
+
+\section{Results}
+Table~\ref{tab:results} summarises the test performance and cost. Full fine-tuning is
+the most accurate method (\fullAcc\% accuracy, \fullFone\% macro-F1). Head-only training
+is only \headAcc\% accurate but is much cheaper: \headTime{} minutes versus \fullTime{}
+minutes, with 40\% of the parameters. Among the traditional classifiers, logistic
+regression performs best (\lrAcc\%, macro-F1 \lrFone\%), followed by the linear SVM
+(\svmAcc\%) and the random forest (\rfAcc\%).
+
+\begin{table}[t]
+\centering
+\caption{Test results (official test split, evaluated once). ``Train acc.'' is accuracy
+on the unaugmented training set of the selected checkpoint; ``Gap'' is train minus test
+accuracy in percentage points. Times for the scikit-learn rows include the shared
+\extractTime-minute feature extraction.}
+\label{tab:results}
+\footnotesize
+\input{../results/tables/results_table.tex}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{training_curves.pdf}
+\caption{Validation behaviour of the two neural strategies. Full fine-tuning improves
+steadily; head-only training converges faster but plateaus lower.}
+\label{fig:curves}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{confusion_pair.pdf}
+\caption{Row-normalised confusion matrices on the test set (rows: true breed, columns:
+predicted breed). Full fine-tuning (left) and classifier-head training (right) share the
+same class order. Full-size versions for all approaches, including logistic regression,
+are in \texttt{results/figures/}.}
+\label{fig:confusion}
+\end{figure}
+
+\paragraph{Confusion structure.}
+Errors are concentrated among visually similar breeds. The most frequent confusion for
+full fine-tuning is \topPairA{} predicted as \topPairB{}
+(\topPairCount{} images, \topPairFrac\% of that class); Table~\ref{tab:confusions} lists
+the ten largest off-diagonal entries. Cat breeds with similar coat patterns
+(e.g.\ Birman, Ragdoll, and Siamese) and small terriers are repeatedly confused, while
+very distinctive breeds are rarely wrong. The weakest breed by F1 is \worstClass{}
+(F1 \worstFone\%), the strongest is \bestClass{} (F1 \bestFone\%). Figure~\ref{fig:examples}
+shows the most confident correct and incorrect predictions of the fully fine-tuned model;
+the failures typically involve unusual poses, heavy occlusion, or a background that
+dominates the frame.
+
+\begin{table}[t]
+\centering
+\caption{Largest off-diagonal entries of the full fine-tuning confusion matrix.}
+\label{tab:confusions}
+\small
+\input{../results/tables/top_confusions_table.tex}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{examples_full.pdf}
+\caption{Most confident correct (top row) and incorrect (bottom row) test predictions of
+the fully fine-tuned model, with predicted confidence.}
+\label{fig:examples}
+\end{figure}
+
+\section{Discussion}
+\paragraph{Accuracy versus cost.}
+The ranking is consistent with the amount of adaptation: full fine-tuning
+(\fullAcc\%) beats head-only training (\headAcc\%), which beats frozen features with
+logistic regression (\lrAcc\%). The gap between full and head-only training
+($\fullAcc-\headAcc$ points) is modest relative to the 2.5$\times$ difference in training
+time and the 2.5$\times$ difference in trainable parameters. This suggests that ImageNet
+features are already well suited to pets and that most of the benefit of fine-tuning
+comes from adapting the head and the last convolutional stage rather than relearning the
+whole network. The traditional classifiers are clearly weaker, but their cost is
+dominated by the one-off feature extraction; once features exist, fitting and evaluating
+all three takes seconds.
+
+\paragraph{Overfitting and generalization.}
+The train/test gaps in Table~\ref{tab:results} separate the strategies. Full fine-tuning
+fits the training set almost perfectly (train accuracy \fullTrainAcc\%, gap
+\fullGap{}~pp), which is expected with 1.56M parameters and only 2,944 images; the
+augmentation, weight decay, label smoothing, and early stopping by validation macro-F1
+limit but do not eliminate this. Head-only training has a smaller gap
+(\headGap{}~pp), because the frozen features cannot memorize the training set as easily.
+Logistic regression also shows a sizeable gap (\lrGap{}~pp), indicating that even a linear
+model overfits 576-dimensional features on this dataset. The absolute test accuracy,
+rather than the gap alone, is the relevant selection criterion, but the pattern is a
+useful warning: with a dataset this small, differences of one or two points between
+configurations are within run-to-run variability and should not be over-interpreted.
+
+\paragraph{Errors and limitations.}
+The confusion analysis points to genuine fine-grained ambiguity rather than random
+failure. Many errors are between breeds that differ mainly in ear shape, muzzle length, or
+coat colour, and some images contain multiple animals or a small subject in a large
+scene. The model sees a centre crop and no segmentation mask, so background context can
+dominate. The 224-pixel input also discards fine texture that might separate, for
+example, terrier varieties. A segmentation-aware crop (the dataset provides trimaps and
+head boxes) or a higher input resolution would likely help, at additional cost.
+
+Our study has several limitations. We use a single random seed and a single
+train/validation split, so we cannot attach confidence intervals to the rankings; the
+test set is large (3,669 images), which keeps the binomial standard error around 0.7
+points, but seed variability of the training procedure is not captured. All neural
+training was done on a 4-core CPU with bfloat16 autocast, which is reproducible but slow
+and may slightly change results relative to full-precision GPU training. We compare one
+backbone and one set of hyper-parameters per strategy; a learning-rate sweep for full
+fine-tuning could close part of the gap. Finally, the dataset's license restricts use to
+research, and the images are web-collected, so label noise and duplicate near-images
+cannot be excluded.
+
+\section{Reproducibility}
+The repository contains the data-split manifests, source code, saved metrics,
+per-image test predictions, checkpoints, and the scripts that generate every table and
+figure. The environment is Python 3.13.9, PyTorch 2.15.0+cpu, TorchVision 0.29.2,
+scikit-learn 1.9.1, NumPy 2.5.4, pandas 3.1.1, and Matplotlib 3.11.2. The README gives
+the download instructions and the exact commands for all three approaches. Seeds for
+Python, NumPy, and PyTorch are fixed at 42, the split is persisted rather than
+recomputed, and deterministic algorithms are requested (with \texttt{warn\_only} because
+a few CPU kernels lack deterministic implementations). Remaining variation comes from
+thread scheduling, bfloat16 arithmetic, and library versions.
+
+\begin{thebibliography}{9}
+\bibitem{parkhi2012cats}
+O.~M. Parkhi, A.~Vedaldi, A.~Zisserman, and C.~V. Jawahar.
+\newblock Cats and Dogs.
+\newblock In \emph{IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
+2012.
+
+\bibitem{howard2019mobilenetv3}
+A.~Howard, M.~Sandler, G.~Chu, L.-C. Chen, B.~Chen, M.~Tan, W.~Wang, Y.~Zhu,
+R.~Pang, V.~Vasudevan, Q.~V. Le, and H.~Adam.
+\newblock Searching for MobileNetV3.
+\newblock In \emph{Proceedings of the IEEE/CVF International Conference on Computer
+Vision (ICCV)}, 2019.
+
+\bibitem{pedregosa2011sklearn}
+F.~Pedregosa et al.
+\newblock Scikit-learn: Machine Learning in Python.
+\newblock \emph{Journal of Machine Learning Research}, 12:2825--2830, 2011.
+
+\bibitem{paszke2019pytorch}
+A.~Paszke et al.
+\newblock PyTorch: An Imperative Style, High-Performance Deep Learning Library.
+\newblock In \emph{Advances in Neural Information Processing Systems (NeurIPS)}, 2019.
+\end{thebibliography}
+
+\end{document}

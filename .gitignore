@@ -1,0 +1,18 @@
+# Data (large, not redistributed)
+data/oxford-iiit-pet/
+*.tar.gz
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Large generated artefacts (features are ~17 MB and can be regenerated)
+results/features/*.npz
+
+# LaTeX intermediates
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
