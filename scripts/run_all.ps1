@@ -14,6 +14,7 @@ $env:PYTHONPATH = "src"
 & $Python src/extract_features.py
 & $Python src/train_sklearn.py
 & $Python src/evaluate_nn.py --tags full head
+& $Python src/compare_models.py
 & $Python src/make_report_assets.py
 
 Push-Location report

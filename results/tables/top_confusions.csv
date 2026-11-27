@@ -1,0 +1,11 @@
+true,predicted,count,fraction_of_true
+american pit bull terrier,staffordshire bull terrier,25,0.25
+Birman,Ragdoll,16,0.16
+american pit bull terrier,american bulldog,15,0.15
+Russian Blue,British Shorthair,14,0.14
+Ragdoll,Birman,13,0.13
+staffordshire bull terrier,american bulldog,11,0.12359550561797752
+Persian,Maine Coon,9,0.09
+Maine Coon,Ragdoll,9,0.09
+Maine Coon,Bengal,9,0.09
+Egyptian Mau,Bengal,8,0.08247422680412371

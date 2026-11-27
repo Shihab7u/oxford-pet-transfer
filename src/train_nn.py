@@ -155,6 +155,10 @@ def main():
     start = time.perf_counter()
     for epoch in range(1, epochs + 1):
         model.train()
+        if args.mode == "head":
+            # Keep the frozen backbone in eval mode: otherwise its BatchNorm running
+            # statistics drift away from the ImageNet values the head was trained on.
+            model.features.eval()
         epoch_start = time.perf_counter()
         running_loss, seen, correct = 0.0, 0, 0
         for images, labels, _ in train_loader:

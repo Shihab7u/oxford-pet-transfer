@@ -29,7 +29,7 @@ def candidates(seed: int):
                 f"C={c}",
                 make_pipeline(
                     StandardScaler(),
-                    LogisticRegression(C=c, max_iter=2000, random_state=seed, n_jobs=-1),
+                    LogisticRegression(C=c, max_iter=2000, random_state=seed),
                 ),
             )
             for c in GRID

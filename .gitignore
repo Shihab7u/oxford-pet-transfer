@@ -16,3 +16,6 @@ report/*.aux
 report/*.log
 report/*.out
 report/*.toc
+
+# Page previews used while checking the layout
+report/page-*.png

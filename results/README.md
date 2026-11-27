@@ -11,7 +11,7 @@ manifests in `data/splits/` and the raw dataset.
 | `metrics/sklearn_*.json` | Validation grid, selected configuration, fit time, test metrics |
 | `predictions/*.csv` | Per-image test predictions with confidence and breed names |
 | `features/extraction_meta.json` | Frozen-feature extraction time and description |
-| `tables/*.csv`, `tables/*.tex` | Dataset counts, results, per-class F1, top confusions, LaTeX tables |
+| `tables/*.csv`, `tables/*.tex` | Dataset counts, results, paired McNemar tests, per-class F1, top confusions, LaTeX tables |
 | `figures/*.pdf`, `figures/*.png` | Training curves, confusion matrices, prediction examples |
 
 The report is `report/report.pdf`; compile it with `pdflatex` from the `report/`

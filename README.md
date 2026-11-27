@@ -1,5 +1,7 @@
 # Oxford-IIIT Pet: transfer-learning comparison with MobileNetV3-Small
 
+Code and results: <https://github.com/Shihab7u/oxford-pet-transfer>
+
 Reproducible PyTorch pipeline comparing three ways of adapting an ImageNet-pretrained
 MobileNetV3-Small to the 37 breed classes of the Oxford-IIIT Pet dataset:
 
@@ -22,6 +24,7 @@ The experiments were run on a CPU-only Windows 11 machine (Intel i5-1135G7, 4 co
 | PyTorch | 2.15.0+cpu |
 | TorchVision | 0.29.2+cpu |
 | scikit-learn | 1.9.1 |
+| SciPy | 1.18.1 |
 | NumPy | 2.5.4 |
 | pandas | 3.1.1 |
 | Matplotlib | 3.11.2 |
@@ -81,7 +84,8 @@ files are committed under `data/splits/`.
 | Test (official) | 3,669 |
 | Total used | 7,349 |
 
-(7,393 JPEGs are present; 44 official-list entries have no image and are skipped.)
+(7,390 JPEGs are present. All 7,349 images referenced by the official lists are used;
+the remaining 41 files are not in the lists and are ignored.)
 
 ## Preprocessing and augmentation
 
@@ -109,7 +113,8 @@ Both neural approaches use AdamW, batch size 32, cross-entropy with label smooth
 
 The classifier head consists of `Linear(576, 1024)`, Hardswish, Dropout(0.2),
 `Linear(1024, 37)`. In head-only mode both linear layers are trainable and everything
-else is frozen.
+else is frozen; the frozen backbone is kept in evaluation mode so its BatchNorm running
+statistics are not updated.
 
 For frozen features, the 576-d output of `features + avgpool` is extracted for every
 split. `StandardScaler` is fit on **training features only**, then logistic regression
@@ -121,10 +126,10 @@ The configuration with the best validation macro-F1 is evaluated once on test.
 ```powershell
 $env:PET_DATA_ROOT = "C:\data\oxford-iiit-pet"
 
-# 1) full fine-tuning (~25 min on the 4-core CPU used here)
+# 1) full fine-tuning (~37 min on the 4-core CPU used here)
 python src/train_nn.py --mode full --epochs 12 --lr 3e-4 --amp bf16
 
-# 2) classifier-head training (~8 min)
+# 2) classifier-head training (~14 min)
 python src/train_nn.py --mode head --epochs 15 --lr 1e-3 --amp bf16
 
 # 3) frozen features + scikit-learn classifiers
@@ -134,10 +139,13 @@ python src/train_sklearn.py
 # 4) final test evaluation (once per neural checkpoint)
 python src/evaluate_nn.py --tags full head
 
-# 5) tables, confusion matrices, prediction examples, report assets
+# 5) paired McNemar comparisons of the saved test predictions
+python src/compare_models.py
+
+# 6) tables, confusion matrices, prediction examples, report assets
 python src/make_report_assets.py
 
-# 6) compile the report (requires a LaTeX installation)
+# 7) compile the report (requires a LaTeX installation)
 cd report
 pdflatex report.tex
 pdflatex report.tex
@@ -169,6 +177,7 @@ src/
   extract_features.py    frozen 576-d feature extraction
   train_sklearn.py       scaling, hyper-parameter search, sklearn classifiers
   evaluate_nn.py         one-shot test evaluation of neural checkpoints
+  compare_models.py      paired McNemar tests on the saved test predictions
   make_report_assets.py  tables, confusion matrices, curves, example predictions
   utils.py               seeding, metrics, JSON helpers
 data/splits/             committed train/val/test manifests (seed 42)
@@ -184,4 +193,17 @@ scripts/run_all.ps1      end-to-end reproduction script
 
 ## Results
 
-See `results/tables/results.csv` and the report (`report/report.pdf`).
+| Approach | Trainable params | Time (min) | Test acc. | Macro-F1 |
+|---|---|---|---|---|
+| Full fine-tuning | 1,555,781 | 37.1 | 84.8 | 84.6 |
+| Classifier head only | 628,773 | 13.8 | **87.0** | **86.9** |
+| Logistic regression (frozen) | 21,349 | 2.1 | 85.4 | 85.3 |
+| Linear SVM (frozen) | 21,349 | 2.3 | 83.9 | 83.6 |
+| Random forest (frozen) | 21,349 | 2.2 | 83.0 | 82.5 |
+
+Training only the classifier head on frozen features is the most accurate strategy
+(exact McNemar tests: p < 0.001 against both full fine-tuning and logistic regression)
+and is cheaper than full fine-tuning. Logistic regression on the same features is
+1.6 points behind but costs about seven times less. See
+`results/tables/results.csv`, `results/tables/mcnemar.csv`, and the report
+(`report/report.pdf`).

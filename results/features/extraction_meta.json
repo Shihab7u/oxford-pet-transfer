@@ -1,0 +1,14 @@
+{
+  "feature_dim": 576,
+  "feature_layer": "output of model.features + global average pooling (penultimate, 576-d)",
+  "weights": "MobileNet_V3_Small_Weights.DEFAULT (ImageNet-1K), frozen",
+  "extraction_seconds": {
+    "train": 43.10561309987679,
+    "val": 8.118569099809974,
+    "test": 75.39297359995544
+  },
+  "total_seconds": 126.6171557996422,
+  "image_size": 224,
+  "batch_size": 64,
+  "torch": "2.15.0+cpu"
+}

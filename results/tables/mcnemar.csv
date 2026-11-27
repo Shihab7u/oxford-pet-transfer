@@ -1,0 +1,11 @@
+model_a,model_b,only_a_correct,only_b_correct,mcnemar_p
+Full fine-tuning,Classifier head only,137,216,3.076614888762126e-05
+Full fine-tuning,Logistic regression (frozen),177,199,0.2787937621261207
+Full fine-tuning,Linear SVM (frozen),216,183,0.10903886988415078
+Full fine-tuning,Random forest (frozen),248,180,0.0011761437937984238
+Classifier head only,Logistic regression (frozen),144,87,0.00021423611292205541
+Classifier head only,Linear SVM (frozen),229,117,1.7539962182793345e-09
+Classifier head only,Random forest (frozen),270,123,9.171275571318284e-14
+Logistic regression (frozen),Linear SVM (frozen),188,133,0.002524612201688528
+Logistic regression (frozen),Random forest (frozen),217,127,1.4014124579879053e-06
+Linear SVM (frozen),Random forest (frozen),218,183,0.08940512058699285

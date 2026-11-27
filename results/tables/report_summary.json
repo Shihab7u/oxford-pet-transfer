@@ -1,0 +1,39 @@
+{
+  "full_train_seconds": 2225.4148909000214,
+  "head_train_seconds": 830.3866624000948,
+  "extraction_seconds": 126.6171557996422,
+  "full_trainable": 1555781,
+  "head_trainable": 628773,
+  "best_epoch_full": 10,
+  "best_epoch_head": 14,
+  "test": {
+    "full": {
+      "accuracy": 0.8484600708639957,
+      "macro_f1": 0.8459717612724925
+    },
+    "head": {
+      "accuracy": 0.8699918233851186,
+      "macro_f1": 0.8687647834283236
+    }
+  },
+  "sklearn": {
+    "logreg": {
+      "config": "C=0.01",
+      "accuracy": 0.8544562551103843,
+      "macro_f1": 0.8526457236174765,
+      "fit_seconds": 0.45971229998394847
+    },
+    "linear_svm": {
+      "config": "C=0.001",
+      "accuracy": 0.8394657944944126,
+      "macro_f1": 0.8355248923317888,
+      "fit_seconds": 12.457466100109741
+    },
+    "random_forest": {
+      "config": "500 trees, sqrt features",
+      "accuracy": 0.8299264104660671,
+      "macro_f1": 0.824897014413398,
+      "fit_seconds": 6.6726436000317335
+    }
+  }
+}
